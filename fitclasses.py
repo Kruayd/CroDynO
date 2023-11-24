@@ -1,3 +1,19 @@
+"""Module containing the base class for cross section fits and all its derived
+subclasses.
+
+References
+----------
+- [1] ATOMIC DATA FOR FUSION VOLUME 1 COLLISIONS OF H, H2, He and Li ATOMS and
+IONS with ATOMS and MOLECULES. C. F. Barnett
+
+Notes
+-----
+Each class inheriting from `CrossSectionFit` must be added to this module and
+must redefine the `_fit_function` property.
+This module uses cross sections expressed in square meters and energies
+expressed in eV.
+
+"""
 from abc import ABCMeta, abstractmethod
 from typing import Iterable
 import numpy as np
@@ -5,47 +21,47 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
 
-# References
-#
-# [1] ATOMIC DATA FOR FUSION VOLUME 1 COLLISIONS OF H, H2, He and Li ATOMS and
-# IONS with ATOMS and MOLECULES. C. F. Barnett
-
-
 class CrossSectionFit(metaclass=ABCMeta):
-    """Base class for different types of cross-section fits.
+    """Base class for cross section fits.
+
+    Notes
+    -----
+    All CroDynO fits are subclasses of `CrossSectionFit` and must be added to
+    the `fitclasses.py` module
 
     Parameters
     ----------
-    domain : (2,) array_like
+    domain : (2,) array_like (eV)
         Boundaries of the domain in which the fit is valid.
 
     description : string
         Description of the process and additional notes.
 
-    energy_space : int_like, float_like or (n,) array_like, optional
-        Value or array used to initialize the energy_space property.
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
 
-    Attributes
-    ----------
-    domain : tuple
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
         Boundaries of the domain in which the fit function is valid.
 
     description : string
         Description of the process and additional notes.
 
-    energy_space : ndarray
-        Array of energy values used to calculate cross-sections.
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
 
     Methods
     -------
     __call__(energies=None)
-        Call self as a function.
+        Call self as a function and evaluate cross section.
 
     energy_space.setter(value)
-        Setter method for the energy_space attribute.
+        Setter method for the `energy_space` attribute.
 
     plot(ax=None, *args, **kwargs)
-        Plot the evaluated cross-section.
+        Plot the evaluated cross section.
 
     """
 
@@ -66,26 +82,34 @@ class CrossSectionFit(metaclass=ABCMeta):
         self.energy_space = energy_space
 
     def __call__(self, energies=None):
-        """Evaluate cross-section for given energies.
+        """Call self as a function and evaluate cross section.
 
         Parameters
         ----------
-        energies : int_like, float_like or (n,) array_like, optional
-            Energies against which to evaluate cross-section.
+        energies : int_like, float_like or (n,) array_like, optional (eV)
+            Energies against which to evaluate cross section.
 
         Returns
         -------
-        ndarray or float
-            The type of self._sigma depends on the behavior of
-            self._fit_function.
+        ndarray or float (m^2)
+            Evaluated cross section.
+
+        Notes
+        -----
+        This method calls the property `_fit_function` as a function, which is
+        implemented as an abstract method and therefore it is mandatory to
+        redifine in each sublcass that inherits from `CrossSectionFit`.
 
         """
         # If energies are provided, update energy_space
+        # The energy_space setter also sets _sigma to None
         if energies is not None:
             self.energy_space = energies
-        # If cross-section has not been evaluated, evaluate it
+        # If cross section has not been evaluated, evaluate it
         if self._sigma is None:
             self._sigma = self._fit_function(self._energy_space)
+        # If both conditions are not met, there's no need to evaluate _sigma
+        # again
         return self._sigma
 
     @property
@@ -107,14 +131,14 @@ class CrossSectionFit(metaclass=ABCMeta):
 
     @energy_space.setter
     def energy_space(self, value):
-        """Setter method for the energy_space attribute.
+        """Setter method for the `energy_space` attribute.
 
         Parameters
         ----------
-        value : int_like, float_like or (n,) array_like, optional
-            If value is an integer, energy_space is set to a log-spaced array
+        value : int_like, float_like or (n,) array_like
+            If value is an integer, `energy_space` is set to a log-spaced array
             between the boundaries of the domain. If value is a float or an
-            array_like, energy_space is set equal to it.
+            array-like, energy_space is set equal to it.
 
         """
         # Reset sigma to None since energy_space has changed
@@ -144,13 +168,13 @@ class CrossSectionFit(metaclass=ABCMeta):
         Parameters
         ----------
         energy_space : ndarray
-            If energy_space is an array, removes forbidden energy values. If it
-            is a scalar, checks if it is within the domain.
+            If `energy_space` is an array, removes forbidden energy values. If
+            it is a scalar, checks if it is within the domain.
 
         Returns
         -------
         ndarray or None
-            Original energy_space parameter stripped of forbidden values.
+            Original `energy_space` parameter stripped of forbidden values.
 
         """
         # If energy_space is a scalar, check if it is within the domain
@@ -166,7 +190,7 @@ class CrossSectionFit(metaclass=ABCMeta):
             return valid_energies.copy() if valid_energies.size > 0 else None
 
     def plot(self, ax=None, *args, **kwargs):
-        """Plot cross-section against energy values.
+        """Plot cross section against energy values.
 
         Parameters
         ----------
@@ -199,47 +223,56 @@ class CrossSectionFit(metaclass=ABCMeta):
         return self._description
 
 
-# The fit_function used in the following subclass corresponds to the one
-# reported in Appendix 1 of [1]. Usually energy is given in eV/amu, therefore
-# the projectile mass is necessary as an additional parameter
 class BarnettChebFit(CrossSectionFit):
     """Subclass for Chebyshev polynomial fit as it is described in Appendix 1
     of ATOMIC DATA FOR FUSION VOLUME 1 COLLISIONS OF H, H2, He and Li ATOMS and
     IONS with ATOMS and MOLECULES by C. F. Barnett
 
+    Notes
+    -----
+    Barnett fits cross sections data with a function of the type
+    f(e) = exp(T(ln(e))), where T is a Chebyshev polynomial of the first kind
+    and e is the energy per unit mass of the projectile (in the target
+    reference frame) expressed in eV/amu. The T0 coefficient given by Barnett
+    doesn't actually correspond to the T0 Chebyshev coefficient, but actually
+    to its double. Additionaly, the cross section is expressed in square
+    centimeters. This class automatically converts to square meters and eV.
+
     Parameters
     ----------
-    domain : (2,) array_like
+    domain : (2,) array_like (eV/amu)
         Boundaries of the domain in which the fit is valid.
 
     description : string
         Description of the process and additional notes.
 
-    projectile_mass : scalar
-        Scalar used to convert from eV/amu to just eV
+    projectile_mass : scalar (amu)
+        Scalar used to convert from eV/amu to just eV.
 
-    energy_space : int_like, float_like or (n,) array_like, optional
-        Value or array used to initialize the energy_space property.
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
 
-    Attributes
-    ----------
-    domain : tuple
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
         Boundaries of the domain in which the fit function is valid.
 
     description : string
         Description of the process and additional notes.
 
-    energy_space : ndarray
-        Array of energy values used to calculate cross-sections.
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
 
     barnett_coefficients : tuple
-        Coefficients given by Barnett for the fit
+        Fit coefficients reported by Barnett.
 
     chebyshev_coefficients : tuple
-        Actual coefficients for the Chebyshev polynomial
+        Actual coefficients for the Chebyshev polynomial.
 
-    chebyshev_domain
-        Domain of the Chebyshev polynomial
+    chebyshev_domain (ln(eV))
+        Domain of the Chebyshev polynomial.
+
     """
 
     def __init__(self, domain, description, projectile_mass,
@@ -260,7 +293,7 @@ class BarnettChebFit(CrossSectionFit):
                                           dtype=np.float64)
         # Assign _barnett_coefficients
         self._barnett_coefficients = tuple(barnett_coefficients)
-        # First Barnett coefficient is twice the corresponding Chebyshev
+        # First Barnett coefficient is double the corresponding Chebyshev
         # coefficient
         barnett_coefficients[0] /= 2
         # Generate the Chebyshev polynomial
@@ -286,7 +319,7 @@ class BarnettChebFit(CrossSectionFit):
 
     @property
     def _fit_function(self):
-        # Barnett cross-sections are give in cm^2
+        # Barnett cross sections are give in cm^2 but we want m^2
         return lambda x: np.exp(self._cheb_poly(np.log(x)))/1e4
 
     def __repr__(self):
