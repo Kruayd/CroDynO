@@ -4,7 +4,10 @@ subclasses.
 References
 ----------
 - [1] ATOMIC DATA FOR FUSION VOLUME 1 COLLISIONS OF H, H2, He and Li ATOMS and
-IONS with ATOMS and MOLECULES. C. F. Barnett
+IONS with ATOMS and MOLECULES. C. F. Barnett.
+
+- [2] The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+Collision Cross Section (2). T. Tabata.
 
 Notes
 -----
@@ -153,12 +156,12 @@ class CrossSectionFit(metaclass=ABCMeta):
                 # Convert to array and filter forbidden values
                 value = np.asarray(value, dtype=np.float64)
                 if value.ndim > 1:
-                    raise TypeError('Array must be a one-dimensional array or '
-                                    'a float')
+                    raise TypeError('Array must be a one-dimensional array or'
+                                    ' a float')
                 self._energy_space = self._allowed_energies(value)
             except Exception as e:
-                raise TypeError('Invalid type provided for '
-                                f'{type(self).__name__}.energy_space') from e
+                raise TypeError('Invalid type provided for'
+                                f' {type(self).__name__}.energy_space') from e
         # Save value for __repr__ method
         self._energy_repr = value
 
@@ -216,8 +219,8 @@ class CrossSectionFit(metaclass=ABCMeta):
             raise TypeError('ax must be a valid matplotlib.axes.Axes')
 
     def __repr__(self):
-        return f"CrossSectionFit({self._domain}, '{self._description}', "\
-               f"energy_space={repr(self._energy_repr)})"
+        return f"{type(self).__name__}({self._domain}, '{self._description}',"\
+               f" energy_space={repr(self._energy_repr)})"
 
     def __str__(self):
         return self._description
@@ -226,7 +229,7 @@ class CrossSectionFit(metaclass=ABCMeta):
 class BarnettChebFit(CrossSectionFit):
     """Subclass for Chebyshev polynomial fit as it is described in Appendix 1
     of ATOMIC DATA FOR FUSION VOLUME 1 COLLISIONS OF H, H2, He and Li ATOMS and
-    IONS with ATOMS and MOLECULES by C. F. Barnett
+    IONS with ATOMS and MOLECULES by C. F. Barnett.
 
     Notes
     -----
@@ -235,7 +238,7 @@ class BarnettChebFit(CrossSectionFit):
     and e is the energy per unit mass of the projectile (in the target
     reference frame) expressed in eV/amu. The T0 coefficient given by Barnett
     doesn't actually correspond to the T0 Chebyshev coefficient, but actually
-    to its double. Additionaly, the cross section is expressed in square
+    to its double. Additionally, the cross section is expressed in square
     centimeters. This class automatically converts to square meters and eV.
 
     Parameters
@@ -248,6 +251,9 @@ class BarnettChebFit(CrossSectionFit):
 
     projectile_mass : scalar (amu)
         Scalar used to convert from eV/amu to just eV.
+
+    barnett_coefficients : array_like
+        Fit coefficients reported by Barnett.
 
     energy_space : int_like, float_like or (n,) array_like, optional (eV)
         Value or array used to initialize the `energy_space` property. Default
@@ -285,12 +291,17 @@ class BarnettChebFit(CrossSectionFit):
         # Initialize base class instance
         super().__init__(np.array(domain) * projectile_mass, description,
                          energy_space=energy_space)
+
         # Ensure barnett_coefficients is a valid iterable that can be cast to a
-        # numeric ndarray
+        # 1D numeric ndarray
         if not isinstance(barnett_coefficients, Iterable):
             raise ValueError('Barnett coefficients must be a valid Iterable')
         barnett_coefficients = np.asarray(barnett_coefficients,
                                           dtype=np.float64)
+        if barnett_coefficients.ndim != 1:
+            raise TypeError('Barnett coefficients must be a one-dimensional'
+                            ' array_like')
+
         # Assign _barnett_coefficients
         self._barnett_coefficients = tuple(barnett_coefficients)
         # First Barnett coefficient is double the corresponding Chebyshev
@@ -320,11 +331,201 @@ class BarnettChebFit(CrossSectionFit):
     @property
     def _fit_function(self):
         # Barnett cross sections are give in cm^2 but we want m^2
-        return lambda x: np.exp(self._cheb_poly(np.log(x)))/1e4
+        return lambda x: np.exp(self._cheb_poly(np.log(x))) / 1e4
 
     def __repr__(self):
         domain = (self._domain[0] / self._projectile_mass,
                   self._domain[1] / self._projectile_mass)
-        return f"BarnettChebFit({domain}, '{self._description}', "\
-               f"{self._projectile_mass}, {self._barnett_coefficients}, "\
-               f"energy_space={repr(self._energy_repr)})"
+        return f"{type(self).__name__}({domain}, '{self._description}',"\
+               f" {self._projectile_mass}, {self._barnett_coefficients},"\
+               f" energy_space={repr(self._energy_repr)})"
+
+
+class TabataFitBase(CrossSectionFit):
+    """Base subclass for semiempirically analytic expression fit as first
+    described by Green and McNeal and reported in The Collected Works of Tatsuo
+    Tabata, Volume 17, Atomic and Molecular Collision Cross Sections (2) by T.
+    Tabata.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, the cross section is expressed in
+    square centimeters and, therefore, each subclass derived from this one must
+    convert to square meters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    def __init__(self, domain, description, tabata_parameters,
+                 energy_space=5000):
+
+        # Initialize base class instance
+        super().__init__(domain, description, energy_space=energy_space)
+
+        # Ensure tabata_parameters is a valid iterable that can be cast to a
+        # 1D numeric ndarray
+        if not isinstance(tabata_parameters, Iterable):
+            raise ValueError('Tabata parameters must be a valid Iterable')
+        tabata_parameters = np.asarray(tabata_parameters,
+                                       dtype=np.float64)
+        if tabata_parameters.ndim != 1:
+            raise TypeError('Tabata parameters must be a one-dimensional'
+                            ' array_like')
+
+        # Assign _activation_energy and _tabata_coefficients
+        self._activation_energy = tabata_parameters[0]
+        self._tabata_coefficients = tuple(tabata_parameters[1:])
+
+    @property
+    def activation_energy(self):
+        return self._activation_energy
+
+    @property
+    def tabata_coefficients(self):
+        return self._tabata_coefficients
+
+    @property
+    def _f1(self):
+        # Tabata's σ0 constant (in cm^2)
+        s0 = 1e-16
+        # Rydberg constant (in eV)
+        ryd = 1.361e1
+        # Tabata's f1 function
+        return lambda x: s0 * self._tabata_coefficients[0]\
+            * np.power(x / ryd, self._tabata_coefficients[1])
+
+    @property
+    def _f2(self):
+        # Tabata's f2 function
+        return lambda x: self._f1(x) /\
+            (1 + np.power(x / self._tabata_coefficients[2],
+                          self._tabata_coefficients[1] +
+                          self._tabata_coefficients[3]))
+
+    @property
+    def _f3(self):
+        # Tabata's f3 function
+        return lambda x: self._f1(x) /\
+            (1 + np.power(x / self._tabata_coefficients[2],
+                          self._tabata_coefficients[1] +
+                          self._tabata_coefficients[3]) +
+             np.power(x / self._tabata_coefficients[4],
+                      self._tabata_coefficients[1] +
+                      self._tabata_coefficients[5]))
+
+    @property
+    def _f4(self):
+        # Tabata's f4 function
+        return lambda x: self._f1(x) *\
+            (1 + np.power(x / self._tabata_coefficients[2],
+                          self._tabata_coefficients[3] +
+                          self._tabata_coefficients[1])) /\
+            (1 + np.power(x / self._tabata_coefficients[4],
+                          self._tabata_coefficients[3] +
+                          self._tabata_coefficients[5]) +
+             np.power(x / self._tabata_coefficients[6],
+                      self._tabata_coefficients[3] +
+                      self._tabata_coefficients[7]))
+
+    def __repr__(self):
+        tabata_parameters = (self._activation_energy,
+                             *self._tabata_coefficients)
+        return f"{type(self).__name__}({self._domain}, '{self._description}',"\
+               f" {tabata_parameters}, energy_space={repr(self._energy_repr)})"
+
+
+class TabataFit10(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #10 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    def _fit_function(self):
+        return lambda x: (self._f3(x - self._activation_energy) +
+                          self._tabata_coefficients[6] *
+                          self._f3((x - self._activation_energy) /
+                                   self._tabata_coefficients[7])) / 1e4
