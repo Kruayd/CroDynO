@@ -429,14 +429,14 @@ class TabataFitBase(CrossSectionFit):
         # Rydberg constant (in eV)
         ryd = 1.361e1
         # Tabata's f1 function
-        return lambda x: s0 * self._tabata_coefficients[0]\
-            * np.power(x / ryd, self._tabata_coefficients[1])
+        return lambda x: s0 * self._tabata_coefficients[0] *\
+            np.power(x / ryd, self._tabata_coefficients[1])
 
     @property
     def _f2(self):
         # Tabata's f2 function
         return lambda x: self._f1(x) /\
-            (1 + np.power(x / self._tabata_coefficients[2],
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[2],
                           self._tabata_coefficients[1] +
                           self._tabata_coefficients[3]))
 
@@ -444,10 +444,10 @@ class TabataFitBase(CrossSectionFit):
     def _f3(self):
         # Tabata's f3 function
         return lambda x: self._f1(x) /\
-            (1 + np.power(x / self._tabata_coefficients[2],
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[2],
                           self._tabata_coefficients[1] +
                           self._tabata_coefficients[3]) +
-             np.power(x / self._tabata_coefficients[4],
+             np.power(x * 1e-3 / self._tabata_coefficients[4],
                       self._tabata_coefficients[1] +
                       self._tabata_coefficients[5]))
 
@@ -455,13 +455,13 @@ class TabataFitBase(CrossSectionFit):
     def _f4(self):
         # Tabata's f4 function
         return lambda x: self._f1(x) *\
-            (1 + np.power(x / self._tabata_coefficients[2],
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[2],
                           self._tabata_coefficients[3] +
                           self._tabata_coefficients[1])) /\
-            (1 + np.power(x / self._tabata_coefficients[4],
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[4],
                           self._tabata_coefficients[3] +
                           self._tabata_coefficients[5]) +
-             np.power(x / self._tabata_coefficients[6],
+             np.power(x * 1e-3 / self._tabata_coefficients[6],
                       self._tabata_coefficients[3] +
                       self._tabata_coefficients[7]))
 
@@ -524,6 +524,7 @@ class TabataFit10(TabataFitBase):
 
     """
 
+    @property
     def _fit_function(self):
         return lambda x: (self._f3(x - self._activation_energy) +
                           self._tabata_coefficients[6] *
