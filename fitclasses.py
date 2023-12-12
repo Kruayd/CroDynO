@@ -176,7 +176,7 @@ class CrossSectionFit(metaclass=ABCMeta):
 
         Returns
         -------
-        ndarray or None
+        ndarray or NaN
             Original `energy_space` parameter stripped of forbidden values.
 
         """
@@ -184,13 +184,13 @@ class CrossSectionFit(metaclass=ABCMeta):
         # boundaries
         if energy_space.ndim == 0:
             return energy_space.copy() if self.domain[0] <= energy_space <=\
-                   self.domain[1] else None
+                   self.domain[1] else np.NaN
         else:
             # If energy_space is an array, filter out values outside the domain
             # boundaries
             valid_energies = energy_space[(energy_space >= self.domain[0]) &
                                           (energy_space <= self.domain[1])]
-            return valid_energies.copy() if valid_energies.size > 0 else None
+            return valid_energies.copy() if valid_energies.size > 0 else np.NaN
 
     def plot(self, ax=None, *args, **kwargs):
         """Plot cross section against energy values.
@@ -428,21 +428,75 @@ class TabataFitBase(CrossSectionFit):
         s0 = 1e-16
         # Rydberg constant (in eV)
         ryd = 1.361e1
-        # Tabata's f1 function
+        # Tabata's f1 function with first set of parameters
+        # (a1, a2)
         return lambda x: s0 * self._tabata_coefficients[0] *\
             np.power(x / ryd, self._tabata_coefficients[1])
 
     @property
+    def _f1_2(self):
+        # Tabata's σ0 constant (in cm^2)
+        s0 = 1e-16
+        # Rydberg constant (in eV)
+        ryd = 1.361e1
+        # Tabata's f1 function with second set of parameters
+        # (a5, a6)
+        return lambda x: s0 * self._tabata_coefficients[4] *\
+            np.power(x / ryd, self._tabata_coefficients[5])
+
+    @property
+    def _f1_3(self):
+        # Tabata's σ0 constant (in cm^2)
+        s0 = 1e-16
+        # Rydberg constant (in eV)
+        ryd = 1.361e1
+        # Tabata's f1 function with third set of parameters
+        # (a7, a8)
+        return lambda x: s0 * self._tabata_coefficients[6] *\
+            np.power(x / ryd, self._tabata_coefficients[7])
+
+    @property
+    def _f1_4(self):
+        # Tabata's σ0 constant (in cm^2)
+        s0 = 1e-16
+        # Rydberg constant (in eV)
+        ryd = 1.361e1
+        # Tabata's f1 function with fourth set of parameters
+        # (a5, a2)
+        return lambda x: s0 * self._tabata_coefficients[4] *\
+            np.power(x / ryd, self._tabata_coefficients[1])
+
+    @property
     def _f2(self):
-        # Tabata's f2 function
+        # Tabata's f2 function with first set of parameters
+        # (a1, a2, a3, a4)
         return lambda x: self._f1(x) /\
             (1 + np.power(x * 1e-3 / self._tabata_coefficients[2],
                           self._tabata_coefficients[1] +
                           self._tabata_coefficients[3]))
 
     @property
+    def _f2_2(self):
+        # Tabata's f2 function with second set of parameters
+        # (a5, a6, a7, a8)
+        return lambda x: self._f1_2(x) /\
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[6],
+                          self._tabata_coefficients[5] +
+                          self._tabata_coefficients[7]))
+
+    @property
+    def _f2_3(self):
+        # Tabata's f2 function with third set of parameters
+        # (a7, a8, a9, a10)
+        return lambda x: self._f1_3(x) /\
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[8],
+                          self._tabata_coefficients[7] +
+                          self._tabata_coefficients[9]))
+
+    @property
     def _f3(self):
-        # Tabata's f3 function
+        # Tabata's f3 function with first set of parameters
+        # (a1, a2, a3, a4, a5, a6)
         return lambda x: self._f1(x) /\
             (1 + np.power(x * 1e-3 / self._tabata_coefficients[2],
                           self._tabata_coefficients[1] +
@@ -452,11 +506,35 @@ class TabataFitBase(CrossSectionFit):
                       self._tabata_coefficients[5]))
 
     @property
+    def _f3_2(self):
+        # Tabata's f3 function with second set of parameters
+        # (a7, a8, a9, a10, a11, a12)
+        return lambda x: self._f1_3(x) /\
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[8],
+                          self._tabata_coefficients[7] +
+                          self._tabata_coefficients[9]) +
+             np.power(x * 1e-3 / self._tabata_coefficients[10],
+                      self._tabata_coefficients[7] +
+                      self._tabata_coefficients[11]))
+
+    @property
+    def _f3_3(self):
+        # Tabata's f3 function with third set of parameters
+        # (a5, a2, a6, a7, a8, a9)
+        return lambda x: self._f1_4(x) /\
+            (1 + np.power(x * 1e-3 / self._tabata_coefficients[5],
+                          self._tabata_coefficients[1] +
+                          self._tabata_coefficients[6]) +
+             np.power(x * 1e-3 / self._tabata_coefficients[7],
+                      self._tabata_coefficients[1] +
+                      self._tabata_coefficients[8]))
+
+    @property
     def _f4(self):
         # Tabata's f4 function
         return lambda x: self._f1(x) *\
             (1 + np.power(x * 1e-3 / self._tabata_coefficients[2],
-                          self._tabata_coefficients[3] +
+                          self._tabata_coefficients[3] -
                           self._tabata_coefficients[1])) /\
             (1 + np.power(x * 1e-3 / self._tabata_coefficients[4],
                           self._tabata_coefficients[3] +
@@ -470,6 +548,296 @@ class TabataFitBase(CrossSectionFit):
                              *self._tabata_coefficients)
         return f"{type(self).__name__}({self._domain}, '{self._description}',"\
                f" {tabata_parameters}, energy_space={repr(self._energy_repr)})"
+
+
+class TabataFit1(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #1 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: self._f2(x - self._activation_energy) / 1e4
+
+
+class TabataFit2(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #2 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: (self._f2(x - self._activation_energy) +
+                          self._tabata_coefficients[4] *
+                          self._f2((x - self._activation_energy) /
+                                   self._tabata_coefficients[5])) / 1e4
+
+
+class TabataFit3(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #3 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: (self._f2(x - self._activation_energy) +
+                          self._f2_2(x - self.activation_energy)) / 1e4
+
+
+class TabataFit6(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #6 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: self._f3(x - self._activation_energy) / 1e4
+
+
+class TabataFit8(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #8 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: (self._f2(x - self._activation_energy) +
+                          self._f3_3(x - self._activation_energy)) / 1e4
 
 
 class TabataFit10(TabataFitBase):
@@ -530,3 +898,176 @@ class TabataFit10(TabataFitBase):
                           self._tabata_coefficients[6] *
                           self._f3((x - self._activation_energy) /
                                    self._tabata_coefficients[7])) / 1e4
+
+
+class TabataFit11(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #11 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: (self._f3(x - self._activation_energy) +
+                          self._f2_3(x - self._activation_energy)) / 1e4
+
+
+class TabataFit13(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #13 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: (self._f3(x - self._activation_energy) +
+                          self._f3_2(x - self._activation_energy)) / 1e4
+
+
+class TabataFit14(TabataFitBase):
+    """Subclass for semiempirically analytic expression fit #14 as reported in
+    The Collected Works of Tatsuo Tabata, Volume 17, Atomic and Molecular
+    Collision Cross Sections (2) by T. Tabata on page 4.
+
+    Notes
+    -----
+    Tabata uses 14 distinct analytic expressions to fit cross sections data.
+    Each main expression is evaluated through a set of 4 simpler expressions,
+    referred as f1, f2, f3 and f4, that take as their argument E1 the
+    difference between the incident projectile energy E and the threshold
+    energy of the reaction Eth. Additionally, this class automatically converts
+    to square meters while the original cross section is expressed in square
+    centimeters.
+
+    Parameters
+    ----------
+    domain : (2,) array_like (eV)
+        Boundaries of the domain in which the fit is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    tabata_parameters : array_like
+        Iterable that must contain the necessary fit parameters. First element
+        must always be the threshold energy of the reaction Eth, followed by
+        the coefficients used by Tabata for the fit in the order that he
+        reports.
+
+    energy_space : int_like, float_like or (n,) array_like, optional (eV)
+        Value or array used to initialize the `energy_space` property. Default
+        is 5000. See the `energy_space` property and setter method.
+
+    Attributes & Properties
+    -----------------------
+    domain : tuple (eV)
+        Boundaries of the domain in which the fit function is valid.
+
+    description : string
+        Description of the process and additional notes.
+
+    energy_space : ndarray (eV)
+        Array of energy values used to calculate cross section.
+
+    activation_energy : float
+        Threshold energy of the reaction (eV).
+
+    tabata_coefficients : tuple
+        Fit coefficients.
+
+    """
+
+    @property
+    def _fit_function(self):
+        return lambda x: self._f4(x - self._activation_energy) / 1e4
